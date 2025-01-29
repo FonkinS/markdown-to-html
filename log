@@ -6,3 +6,5 @@ rust is fucking weird
 Spent a while trying to figure out how rust multi-file projects work
 Now am trying to work out how I'm actually going to structure the algorithm
 
+29/1/24
+Made Header lexing. Rust enums are fucking weird

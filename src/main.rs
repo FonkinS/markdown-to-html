@@ -1,6 +1,8 @@
 use std::env;
 use std::fs;
 
+// cargo run -- test.md
+
 
 use crate::lexer::lexer::analyze;
 
