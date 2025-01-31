@@ -1,46 +1,70 @@
 #[allow(dead_code)]
+enum _TOKEN {
+    TOKEN,
+    BOLD,
+    ITALIC,
+    CODE,
+}
 
-pub mod lexer {
-    enum _TOKEN {
-        TOKEN,
-        BOLD,
-        ITALIC,
-        CODE,
-    }
+#[allow(dead_code)]
+enum LINETYPE {
+    LtP,
+    LtH1,
+    LtH2,
+    LtH3,
+    LtH4,
+    LtH5,
+    LtH6,
+    LtEmpty,
+    LtNone,
+    LtLine,
+    LtQuote,
+    LtUL,
+    LtOL,
+    LtCodeChange,
+    LtCodeIndent,
+    LtImage,
+}
 
-    enum LINETYPE {
-        LtP,
-        LtH1,
-        LtH2,
-        LtH3,
-        LtH4,
-        LtH5,
-        LtH6,
-    }
 
-    pub fn analyze(lines: &Vec<&str>) {
-        let mut line_types : Vec<LINETYPE> = vec!(); 
-        let mut line_contents : Vec<&str> = vec!();
-        for l in 0..lines.len() {
-            let line = lines[l].trim_start();
-            let mut chars = line.chars();
+mod line_check;
 
-            // Header
-            let mut header_depth = 0;
-            while chars.next().unwrap_or(' ') == '#' {
-                header_depth += 1;
-            }
-            if header_depth > 0 && header_depth <= 7 {
-                if header_depth == 1 {line_types.push(LINETYPE::LtH1);}
-                else if header_depth == 2 {line_types.push(LINETYPE::LtH2);}
-                else if header_depth == 3 {line_types.push(LINETYPE::LtH3);}
-                else if header_depth == 4 {line_types.push(LINETYPE::LtH4);}
-                else if header_depth == 5 {line_types.push(LINETYPE::LtH5);}
-                else if header_depth == 6 {line_types.push(LINETYPE::LtH6);}
-                line_contents.push(chars.as_str());
-            }
+fn implement<'a>(val: Option<(&'a str, LINETYPE)>, lc: &mut Vec<&'a str>, lt: &mut Vec<LINETYPE>) -> bool {
+    match val {
+        Some(x) => {
+            lc.push(x.0);
+            lt.push(x.1);
+            return true;
         }
-
-        println!("{line_contents:?}");
+        None => {return false;}
     }
+}
+
+pub fn analyze(lines: &Vec<&str>) {
+    let mut lt : Vec<LINETYPE> = vec!(); 
+    let mut lc : Vec<&str> = vec!();
+    for l in 0..lines.len() {
+        let line = lines[l].trim_start();
+
+        if implement(line_check::check_empty(line), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_header(line), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_line(line), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_blockquote(line), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_unorderedlist(line), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_orderedlist(line), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_code_indent(lines[l]), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_code_change(line), &mut lc, &mut lt) {continue;}
+        if implement(line_check::check_image(line), &mut lc, &mut lt) {continue;}
+        implement(line_check::check_paragraph(line), &mut lc, &mut lt);
+    }
+
+    assert!(lc.len() == lines.len());
+    assert!(lc.len() == lt.len());
+
+    for l in 0..lines.len() {
+
+    }
+
+    println!("{} vs {}", lc.len(), lines.len());
+    println!("{lc:?}");
 }

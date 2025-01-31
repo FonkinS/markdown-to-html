@@ -8,3 +8,7 @@ Now am trying to work out how I'm actually going to structure the algorithm
 
 29/1/24
 Made Header lexing. Rust enums are fucking weird
+
+21/1/24
+Finished the rest of the individual line lexing. They are all processed in a new file: line_check.rs
+Have to figure out how to do individual token lexing

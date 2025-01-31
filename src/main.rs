@@ -4,7 +4,7 @@ use std::fs;
 // cargo run -- test.md
 
 
-use crate::lexer::lexer::analyze;
+use crate::lexer::analyze;
 
 mod lexer;
 

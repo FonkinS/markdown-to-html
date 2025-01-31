@@ -35,6 +35,12 @@ _You **can** combine them_
     1. Item 3a
     2. Item 3b
 
+****************
+
+------------------
+
+=======================
+
 ## Images
 
 ![This is an alt text.](/image/sample.webp "This is a sample image.")
@@ -64,6 +70,12 @@ let message = 'Hello world';
 alert(message);
 ```
 
+    let message = "your mom";
+
 ## Inline code
 
 This web site is using `markedjs/marked`.
+
+> Quote
+> Quote More
+> Quote Even More More
