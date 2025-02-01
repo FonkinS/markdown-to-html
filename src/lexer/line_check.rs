@@ -9,13 +9,14 @@ pub (super) fn check_header<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
         prev.next();
     }
     if header_depth > 0 && header_depth <= 7 {
-        let mut line_type : LINETYPE = LINETYPE::LtNone;
+        let line_type : LINETYPE;
         if header_depth == 1 {line_type = LINETYPE::LtH1}
-        else if header_depth == 2 {line_type = LINETYPE::LtH1}
-        else if header_depth == 3 {line_type = LINETYPE::LtH1}
-        else if header_depth == 4 {line_type = LINETYPE::LtH1}
-        else if header_depth == 5 {line_type = LINETYPE::LtH1}
-        else if header_depth == 6 {line_type = LINETYPE::LtH1}
+        else if header_depth == 2 {line_type = LINETYPE::LtH2}
+        else if header_depth == 3 {line_type = LINETYPE::LtH3}
+        else if header_depth == 4 {line_type = LINETYPE::LtH4}
+        else if header_depth == 5 {line_type = LINETYPE::LtH5}
+        else if header_depth == 6 {line_type = LINETYPE::LtH6}
+        else {return None}
         return Some((prev.as_str().trim_start(), line_type));
     }
     return None;
@@ -81,7 +82,8 @@ pub (super) fn check_blockquote<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)
 pub (super) fn check_unorderedlist<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
     let mut iter = line.chars();
     let c = iter.next().unwrap();
-    if c == '-' || c == '+' || c == '*' || c =='–' {
+    let n = iter.next().unwrap();
+    if (c == '-' || c == '+' || c == '*' || c =='–') && n == ' ' {
         return Some((iter.as_str().trim_start(), LINETYPE::LtUL));
     }
     return None;
@@ -92,7 +94,9 @@ pub (super) fn check_orderedlist<'a>(line: &'a str) -> Option<(&'a str, LINETYPE
     if halves != None {
         let halves = halves.unwrap();
         if halves.0.parse::<f64>().is_ok() {
-            return Some((halves.1.trim_start(), LINETYPE::LtOL));
+            if halves.1.chars().next().unwrap() == ' ' {
+                return Some((halves.1.trim_start(), LINETYPE::LtOL));
+            }
         }
     }
     return None;
@@ -123,4 +127,21 @@ pub (super) fn check_image<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
 
 pub (super) fn check_paragraph<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
     return Some((line, LINETYPE::LtP));
+}
+
+// TODO Table text alignment
+pub (super) fn check_table_split<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
+    let changedline = line.trim().replace(" ", "").replace("|", "").replace("-", "").replace("–", "").replace(":", "");
+    if changedline.len() == 0 {
+        return Some(("TABLE SPLIT", LINETYPE::LtTableSplit));
+    }
+    return None;
+}
+
+pub (super) fn check_table<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
+    let trimmedline = line.trim();
+    if trimmedline.starts_with("|") && trimmedline.ends_with("|") {
+        return Some((trimmedline, LINETYPE::LtTable));
+    }
+    return None;
 }
