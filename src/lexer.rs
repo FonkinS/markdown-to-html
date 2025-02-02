@@ -1,5 +1,5 @@
 
-enum LINETYPE {
+pub enum LINETYPE {
     LtP,
     LtH1,
     LtH2,
@@ -21,15 +21,15 @@ enum LINETYPE {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-enum TOKEN<T> {
+pub enum TOKEN<T> {
     TEXT(T),
     BOLD,
     ITALIC,
     BOLDITALIC,
     CODE,
     LINK(T, String),
-    LINEBREAK,
-    ESCAPE,
+    LINEBREAK, // TODO
+    ESCAPE, // TODO
     TABLESPLIT
 }
 
@@ -91,7 +91,7 @@ fn check_emphasis(prev_chars: [char;3]) -> Option<TOKEN<String>> {
     return None;
 }
 
-// TODO Table Cells
+// TODO Proper Code Support
 fn analyze_tokens(line: &str) -> Vec<TOKEN<String>> {
     let mut tokens : Vec<TOKEN<String>> = vec!();
     let mut line_chars = line.chars();
@@ -136,7 +136,6 @@ fn analyze_table(line: &str) -> Vec<TOKEN<String>> {
     let line : Vec<&str> = line.split("|").collect::<Vec<&str>>()
         .iter().map(|x| x.trim()).collect::<Vec<&str>>()
         .into_iter().filter(|x| x.len() > 0).collect();
-    println!("{:?}", line);
     for c in line {
         let tok = analyze_tokens(c);
         for t in tok {
@@ -147,29 +146,31 @@ fn analyze_table(line: &str) -> Vec<TOKEN<String>> {
     return tokens;
 }
 
-
-pub fn analyze(lines: &Vec<&str>) {
-    let (line_types, line_contents) = analyze_lines(lines);
-
+fn create_tokens(line_contents: &Vec<&str>, line_types: &Vec<LINETYPE>) -> Vec<Vec<TOKEN<String>>> {
     let mut line_tokens : Vec<Vec<TOKEN<String>>> = vec!();
-
-    for l in 0..lines.len() {
+    for l in 0..line_contents.len() {
         match line_types[l] {
             LINETYPE::LtImage => line_tokens.push(vec!()),
             LINETYPE::LtCodeChange => line_tokens.push(vec!()),
-            LINETYPE::LtCodeIndent => line_tokens.push(vec!()),
+            LINETYPE::LtCodeIndent => line_tokens.push(vec!(TOKEN::TEXT(line_contents[l].to_string()))),
             LINETYPE::LtTableSplit => line_tokens.push(vec!()),
-            LINETYPE::LtTable => line_tokens.push(analyze_table(line_contents[l])),
             LINETYPE::LtEmpty => line_tokens.push(vec!()),
             LINETYPE::LtLine => line_tokens.push(vec!()),
+            LINETYPE::LtTable => line_tokens.push(analyze_table(line_contents[l])),
             _ => line_tokens.push(analyze_tokens(line_contents[l])),
         }
+    }
 
-    }
-    for l in line_contents {
-        println!("{l:?}");
-    }
-    for l in line_tokens {
+    return line_tokens;
+
+}
+
+
+pub fn analyze(lines: &Vec<&str>) -> (Vec<LINETYPE>, Vec<Vec<TOKEN<String>>>) {
+    let (line_types, line_contents) = analyze_lines(lines);
+    let line_tokens = create_tokens(&line_contents, &line_types);
+
+    /*for l in &line_tokens {
         for t in l {
             match t {
                 TOKEN::TEXT(x) => {print!("{x}")}
@@ -178,6 +179,8 @@ pub fn analyze(lines: &Vec<&str>) {
             }
         }
         println!("");
-    }
+    }*/
+   
+    return (line_types, line_tokens);
     //println!("{:?}", line_contents);
 }

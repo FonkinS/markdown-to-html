@@ -15,3 +15,6 @@ Have to figure out how to do individual token lexing
 
 1/2/24
 Added Table line lexing, and created individual symbol lexing (so bold and italic mainly)
+
+2/2/24
+Added conversion to HTML from tokens, MVP now done!
