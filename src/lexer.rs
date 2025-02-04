@@ -33,6 +33,30 @@ pub enum TOKEN<T> {
     TABLESPLIT
 }
 
+#[allow(dead_code)]
+enum OTHERTOKEN<T> {
+    TEXT(T),
+    BOLD(bool),
+    ITALIC(bool),
+    CODE(bool),
+    BLOCKCODE(bool),
+    LINEBREAK,
+    TABLEROW(bool),
+    TABLECELL(bool),
+    LINK {text: T, link:String, caption:String},
+    IMAGE {caption: T, link: String},
+    LISTORDERED(bool),
+    LISTUNORDERED(bool),
+    LISTITEM(bool),
+    BLOCKQUOTE(bool),
+    HEADER1(bool),
+    HEADER2(bool),
+    HEADER3(bool),
+    HEADER4(bool),
+    HEADER5(bool),
+    HEADER6(bool),
+}
+
 
 mod line_check;
 
