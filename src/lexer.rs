@@ -1,50 +1,18 @@
-
-pub enum LINETYPE {
-    LtP,
-    LtH1,
-    LtH2,
-    LtH3,
-    LtH4,
-    LtH5,
-    LtH6,
-    LtEmpty,
-    LtLine,
-    LtQuote,
-    LtUL,
-    LtOL,
-    LtCodeChange,
-    LtCodeIndent,
-    LtImage,
-    LtTable,
-    LtTableSplit,
-}
-
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TOKEN<T> {
-    TEXT(T),
-    BOLD,
-    ITALIC,
-    BOLDITALIC,
-    CODE,
-    LINK(T, String),
-    LINEBREAK, // TODO
-    ESCAPE, // TODO
-    TABLESPLIT
-}
-
-#[allow(dead_code)]
-enum OTHERTOKEN<T> {
     TEXT(T),
     BOLD(bool),
     ITALIC(bool),
     CODE(bool),
     BLOCKCODE(bool),
     LINEBREAK,
+    TABLE(bool),
     TABLEROW(bool),
     TABLECELL(bool),
     LINK {text: T, link:String, caption:String},
     IMAGE {caption: T, link: String},
+    HORIZONTALLINE,
     LISTORDERED(bool),
     LISTUNORDERED(bool),
     LISTITEM(bool),
@@ -55,144 +23,279 @@ enum OTHERTOKEN<T> {
     HEADER4(bool),
     HEADER5(bool),
     HEADER6(bool),
+    EMPTYLINE,
 }
 
 
-mod line_check;
+fn tokenize_emphasis(line: &str) -> Vec<TOKEN<String>> {
+    let mut tokens : Vec<TOKEN<String>> = vec!();
+    let line = line.replace("_", "*").replace("**", "🤓"); // 🤓 is bold
+    let mut chars = line.chars();
+    let mut c = chars.next();
+    let mut phrase = String::new();
 
-fn implement<'a>(val: Option<(&'a str, LINETYPE)>, lc: &mut Vec<&'a str>, lt: &mut Vec<LINETYPE>) -> bool {
-    match val {
-        Some(x) => {
-            lc.push(x.0);
-            lt.push(x.1);
-            return true;
-        }
-        None => {return false;}
-    }
-}
+    let mut in_bold = false;
+    let mut in_italic = false;
+    let mut in_code = false;
 
-fn analyze_lines<'a>(lines: &Vec<&'a str>) -> (Vec<LINETYPE>, Vec<&'a str>){
-    let mut lt : Vec<LINETYPE> = vec!(); 
-    let mut lc : Vec<&str> = vec!();
-
-    for l in 0..lines.len() {
-        let line = lines[l].trim_start();
-
-        if implement(line_check::check_empty(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_header(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_line(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_blockquote(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_unorderedlist(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_orderedlist(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_code_indent(lines[l]), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_code_change(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_image(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_table_split(line), &mut lc, &mut lt) {continue;}
-        if implement(line_check::check_table(line), &mut lc, &mut lt) {continue;}
-        implement(line_check::check_paragraph(line), &mut lc, &mut lt);
-    }
-    assert!(lc.len() == lines.len());
-    assert!(lc.len() == lt.len());
-
-    return (lt, lc);
-
-}
-
-fn char_is_emphasis(c: char) -> bool {
-    c == '*' || c == '_'
-}
-
-fn check_emphasis(prev_chars: [char;3]) -> Option<TOKEN<String>> {
-    if char_is_emphasis(prev_chars[0]) {
-        if char_is_emphasis(prev_chars[1]) {
-            if char_is_emphasis(prev_chars[2]) {
-                return Some(TOKEN::BOLDITALIC);
+    while !c.is_none() {
+        let char = c.unwrap();
+        if char == '*' {
+            if phrase.len() != 0 {
+                tokens.push(TOKEN::TEXT(phrase));
+                phrase = String::new();
             }
-            return Some(TOKEN::BOLD);
+            in_italic = !in_italic;
+            tokens.push(TOKEN::ITALIC(in_italic)); // False for now, we'll change later
+        } else if char == '🤓' {
+            if phrase.len() != 0 {
+                tokens.push(TOKEN::TEXT(phrase));
+                phrase = String::new();
+            }
+            in_bold = !in_bold;
+            tokens.push(TOKEN::BOLD(in_bold)); // False for now, we'll change later
+        } else if char == '`' {
+            if phrase.len() != 0 {
+                tokens.push(TOKEN::TEXT(phrase));
+                phrase = String::new();
+            }
+            in_code = !in_code;
+            tokens.push(TOKEN::CODE(in_code)); // False for now, we'll change later
+        } else {
+            phrase.push(char);
         }
-        return Some(TOKEN::ITALIC);
+
+        c = chars.next();
+    }
+    if phrase.len() != 0 {
+        tokens.push(TOKEN::TEXT(phrase));
+    }
+
+    return tokens;
+}
+
+fn tokenize_header<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    let mut header_depth = 0;
+    let mut iter = line.chars();
+    let mut prev = iter.clone();
+    while iter.next().unwrap_or(' ') == '#' {
+        header_depth += 1;
+        prev.next();
+    }
+    if header_depth > 0 && header_depth <= 7 {
+        let mut initial : TOKEN<String>;
+        if header_depth == 1 {initial = TOKEN::HEADER1(true)}
+        else if header_depth == 2 {initial = TOKEN::HEADER2(true)}
+        else if header_depth == 3 {initial = TOKEN::HEADER3(true)}
+        else if header_depth == 4 {initial = TOKEN::HEADER4(true)}
+        else if header_depth == 5 {initial = TOKEN::HEADER5(true)}
+        else if header_depth == 6 {initial = TOKEN::HEADER6(true)}
+        else {return None}
+        
+        let mut tokens : Vec<TOKEN<String>> = vec!(initial.clone());
+        tokens.append(&mut tokenize_emphasis(prev.as_str().trim_start()));
+        
+        if header_depth == 1 {initial = TOKEN::HEADER1(false)}
+        else if header_depth == 2 {initial = TOKEN::HEADER2(false)}
+        else if header_depth == 3 {initial = TOKEN::HEADER3(false)}
+        else if header_depth == 4 {initial = TOKEN::HEADER4(false)}
+        else if header_depth == 5 {initial = TOKEN::HEADER5(false)}
+        else if header_depth == 6 {initial = TOKEN::HEADER6(false)}
+        tokens.push(initial);
+        
+        return Some(tokens);
+
     }
     return None;
 }
 
-// TODO Proper Code Support
-fn analyze_tokens(line: &str) -> Vec<TOKEN<String>> {
+fn tokenize_horizontalline<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    let mut chars = line.chars();
+    let mut this_char = chars.next();
+    while this_char != None {
+        let new_char = chars.next();
+        if new_char == None {
+            break;
+        }
+        if this_char != new_char && !new_char.unwrap().is_whitespace() {
+            return None;
+        }
+        this_char = new_char;
+    };
+
+    let this_char = this_char.unwrap();
+    if this_char == '=' || this_char == '-' || this_char == '#' || this_char == '*' {
+        return Some(vec!(TOKEN::HORIZONTALLINE));
+    };
+    return None;
+}
+
+// TODO nested quotes
+fn tokenize_blockquote<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    let mut chars = line.chars();
+    if chars.next().unwrap() == '>' {
+        return Some(vec!(TOKEN::BLOCKQUOTE(true), TOKEN::TEXT(chars.as_str().trim().to_string()), TOKEN::BLOCKQUOTE(false)));
+    }
+    return None;
+}
+
+
+fn tokenize_unorderedlist<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    let mut iter = line.chars();
+    let c = iter.next().unwrap();
+    let n = iter.next().unwrap();
+    if (c == '-' || c == '+' || c == '*' || c =='–') && n == ' ' {
+        let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::LISTUNORDERED(true), TOKEN::LISTITEM(true));
+        tokens.append(&mut tokenize_emphasis(iter.as_str().trim_start()));
+        tokens.push(TOKEN::LISTITEM(false));
+        tokens.push(TOKEN::LISTUNORDERED(false));
+        return Some(tokens);
+
+    }
+    return None;
+}
+
+fn tokenize_orderedlist<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    let halves = line.split_once(".");
+    if halves != None {
+        let halves = halves.unwrap();
+        if halves.0.parse::<f64>().is_ok() {
+            if halves.1.chars().next().unwrap() == ' ' {
+                let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::LISTORDERED(true), TOKEN::LISTITEM(true));
+                tokens.append(&mut tokenize_emphasis(halves.1.trim_start()));
+                tokens.push(TOKEN::LISTITEM(false));
+                tokens.push(TOKEN::LISTORDERED(false));
+                return Some(tokens);
+            }
+        }
+    }
+    return None;
+}
+
+fn tokenize_code<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    if line.starts_with("```") {
+        return Some(vec!(TOKEN::CODE(true)));
+    } else if line.starts_with("    ") || line.starts_with("\t") {
+        let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::CODE(true));
+        tokens.append(&mut tokenize_emphasis(line.trim_start()));
+        tokens.push(TOKEN::CODE(false));
+        return Some(tokens);
+    }
+    return None;
+}
+
+fn tokenize_image<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    if line.starts_with("!") {
+        if line.contains("(") && line.contains(")") && line.contains("[") && line.contains("]") {
+            return Some(vec!(TOKEN::IMAGE{caption: line.to_string(), link: "www.google.com".to_string()}));
+        }
+    }
+    return None;
+}
+
+
+/*fn check_table_split<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+    let changedline = line.trim().replace(" ", "").replace("|", "").replace("-", "").replace("–", "").replace(":", "");
+    if changedline.len() == 0 {
+        return Some(("TABLE SPLIT", LINETYPE::LtTableSplit));
+    }
+    return None;
+}
+
+
+fn tokenize_table<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
+    let trimmedline = line.trim();
+    if trimmedline.starts_with("|") && trimmedline.ends_with("|") {
+        return Some((trimmedline, LINETYPE::LtTable));
+    }
+    return None;
+}*/
+// TODO TABLES
+
+
+// TODO macro?
+fn implement_tokens(tokens: Option<Vec<TOKEN<String>>>, list : &mut Vec<TOKEN<String>>) -> bool {
+    match tokens {
+        Some(mut x) => {list.append(&mut x); true},
+        None => false
+    }
+}
+
+
+fn fix_multilines(tokens: Vec<TOKEN<String>>) -> Vec<TOKEN<String>> {
+    let oldtokens = tokens.clone();
     let mut tokens : Vec<TOKEN<String>> = vec!();
-    let mut line_chars = line.chars();
-    let mut prev_chars: [char;3] = [' ';3];
-    let mut current_token : String = String::new();
-    loop {
-        let this_char : char;
-        match line_chars.next() {
-            None => break,
-            Some(x) => this_char = x
-        }
-
-        if char_is_emphasis(this_char) {
-            if !char_is_emphasis(prev_chars[0]) {
-                tokens.push(TOKEN::TEXT(current_token.clone()));
-                current_token = String::new();
-            }
-        } else {
-            match check_emphasis(prev_chars) {
-                None => {}
-                Some(x) => {tokens.push(x);current_token = String::new()}
+    let mut i = 0;
+    while i < oldtokens.len() - 1 {
+        if let TOKEN::BLOCKQUOTE(f) = oldtokens[i] {
+            if let TOKEN::BLOCKQUOTE(s) = oldtokens[i+1] {
+                if f == false && s == true {
+                    i += 2;
+                    continue;
+                }
             }
         }
-
-        current_token.push(this_char);
-
-        prev_chars[2] = prev_chars[1];
-        prev_chars[1] = prev_chars[0];
-        prev_chars[0] = this_char;
+        if let TOKEN::BLOCKCODE(f) = oldtokens[i] {
+            if let TOKEN::BLOCKCODE(s) = oldtokens[i+1] {
+                if f == false && s == true {
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        if let TOKEN::LISTORDERED(f) = oldtokens[i] {
+            if let TOKEN::LISTORDERED(s) = oldtokens[i+1] {
+                if f == false && s == true {
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        if let TOKEN::LISTUNORDERED(f) = oldtokens[i] {
+            if let TOKEN::LISTUNORDERED(s) = oldtokens[i+1] {
+                if f == false && s == true {
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        tokens.push(oldtokens[i].clone());
+        i += 1;
     }
-
-    match check_emphasis(prev_chars) {
-        None => tokens.push(TOKEN::TEXT(current_token)),
-        Some(x) => tokens.push(x)
-    }
-
+    tokens.push(oldtokens[i].clone());
     return tokens;
 }
 
-fn analyze_table(line: &str) -> Vec<TOKEN<String>> {
-    let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::TABLESPLIT);
-    let line : Vec<&str> = line.split("|").collect::<Vec<&str>>()
-        .iter().map(|x| x.trim()).collect::<Vec<&str>>()
-        .into_iter().filter(|x| x.len() > 0).collect();
-    for c in line {
-        let tok = analyze_tokens(c);
-        for t in tok {
-            tokens.push(t);
-        }
-        tokens.push(TOKEN::TABLESPLIT);
-    }
-    return tokens;
-}
 
-fn create_tokens(line_contents: &Vec<&str>, line_types: &Vec<LINETYPE>) -> Vec<Vec<TOKEN<String>>> {
-    let mut line_tokens : Vec<Vec<TOKEN<String>>> = vec!();
-    for l in 0..line_contents.len() {
-        match line_types[l] {
-            LINETYPE::LtImage => line_tokens.push(vec!()),
-            LINETYPE::LtCodeChange => line_tokens.push(vec!()),
-            LINETYPE::LtCodeIndent => line_tokens.push(vec!(TOKEN::TEXT(line_contents[l].to_string()))),
-            LINETYPE::LtTableSplit => line_tokens.push(vec!()),
-            LINETYPE::LtEmpty => line_tokens.push(vec!()),
-            LINETYPE::LtLine => line_tokens.push(vec!()),
-            LINETYPE::LtTable => line_tokens.push(analyze_table(line_contents[l])),
-            _ => line_tokens.push(analyze_tokens(line_contents[l])),
+
+// TODO backslash escaping
+pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
+    //let (line_types, line_contents) = analyze_lines(lines);
+    //let line_tokens = create_tokens(&line_contents, &line_types);
+    let mut tokens : Vec<TOKEN<String>> = vec!();
+    for line in lines {
+        if line.trim().len() == 0 {tokens.push(TOKEN::EMPTYLINE);continue}
+        let trimline = line.trim();
+        if implement_tokens(tokenize_header(trimline), &mut tokens) {continue} 
+        if implement_tokens(tokenize_horizontalline(trimline), &mut tokens) {continue}
+        if implement_tokens(tokenize_blockquote(trimline), &mut tokens) {continue}
+        if implement_tokens(tokenize_unorderedlist(trimline), &mut tokens) {continue}
+        if implement_tokens(tokenize_orderedlist(trimline), &mut tokens) {continue}
+        if implement_tokens(tokenize_code(line), &mut tokens) {continue}
+        if implement_tokens(tokenize_image(trimline), &mut tokens) {continue}
+        implement_tokens(Some(tokenize_emphasis(trimline)), &mut tokens);
+        
+        if line.ends_with("  ") {
+            tokens.push(TOKEN::LINEBREAK)
         }
     }
 
-    return line_tokens;
 
-}
+    // Fix Indent code and blockquotes
+    let tokens = fix_multilines(tokens);
 
-
-pub fn analyze(lines: &Vec<&str>) -> (Vec<LINETYPE>, Vec<Vec<TOKEN<String>>>) {
-    let (line_types, line_contents) = analyze_lines(lines);
-    let line_tokens = create_tokens(&line_contents, &line_types);
+    //println!("{tokens:?}");
+    
 
     /*for l in &line_tokens {
         for t in l {
@@ -205,6 +308,6 @@ pub fn analyze(lines: &Vec<&str>) -> (Vec<LINETYPE>, Vec<Vec<TOKEN<String>>>) {
         println!("");
     }*/
    
-    return (line_types, line_tokens);
+    return tokens;
     //println!("{:?}", line_contents);
 }

@@ -1,67 +1,48 @@
 use crate::lexer::TOKEN;
-use crate::lexer::LINETYPE;
 
-struct Flags {
-    bold: bool,
-    italic: bool,
-    code: bool,
-}
-
-fn flip_flag(flag: &mut bool) -> &str {
-    if *flag {*flag = false; "</"} else {*flag = true; "<"}
-}
-
-fn convert_token<'a>(token: &TOKEN<String>, flags: &mut Flags) -> String {
-    match token {
-        TOKEN::TEXT(t) => t.to_string(),
-        TOKEN::BOLD => (flip_flag(&mut flags.bold).to_owned() + "b>").to_string(),
-        TOKEN::ITALIC => (flip_flag(&mut flags.italic).to_owned() + "i>").to_string(),
-        TOKEN::BOLDITALIC => (flip_flag(&mut flags.bold).to_owned() + "b>" + flip_flag(&mut flags.italic) + "i>").to_string(),
-        TOKEN::CODE => (flip_flag(&mut flags.code).to_owned() + "code>").to_string(),
-        TOKEN::LINK(_t, _link) => "<a>".to_string(),
-        TOKEN::LINEBREAK => "\n".to_string(),
-        TOKEN::ESCAPE => "\\".to_string(),
-        TOKEN::TABLESPLIT => "HELP".to_string()
+fn bool_to_html(t: &str, b: bool) -> String {
+    if b {
+        return "<".to_owned() + t + ">";
+    } else {
+        return "</".to_owned() + t + ">";
     }
 }
 
-fn convert_tokens<'a>(tokens: &Vec<TOKEN<String>>, flags: &mut Flags) -> String {
-    let mut s = String::new();
+pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
+    let mut out_string = String::from("<p>");
+
     for t in tokens {
-        s.push_str(&convert_token(t, flags))
-    }
-    return s;
-}
+        out_string.push_str(&match t {
+            TOKEN::TEXT(t) => t,
+            TOKEN::BOLD(b) => bool_to_html("b", b),
+            TOKEN::ITALIC(b) => bool_to_html("i", b),
+            TOKEN::CODE(b) => bool_to_html("code", b),
+            TOKEN::BLOCKCODE(b) => bool_to_html("code", b),
+            TOKEN::HORIZONTALLINE => String::from("<hr/>"),
+            TOKEN::LINEBREAK => String::from("<br/>"),
+            TOKEN::TABLE(_) => String::new(),
+            TOKEN::TABLEROW(_) => String::new(),
+            TOKEN::TABLECELL(_) => String::new(),
+            TOKEN::LINK{text: _t, link:_l, caption:_c} => String::new(),
+            TOKEN::IMAGE{caption:_c, link:_l} => String::new(),
+            TOKEN::LISTORDERED(b) => bool_to_html("ol", b),
+            TOKEN::LISTUNORDERED(b) => bool_to_html("ul", b),
+            TOKEN::LISTITEM(b) => bool_to_html("li", b),
+            TOKEN::BLOCKQUOTE(b) => bool_to_html("blockquote", b),
+            TOKEN::HEADER1(b) => bool_to_html("h1", b),
+            TOKEN::HEADER2(b) => bool_to_html("h2", b),
+            TOKEN::HEADER3(b) => bool_to_html("h3", b),
+            TOKEN::HEADER4(b) => bool_to_html("h4", b),
+            TOKEN::HEADER5(b) => bool_to_html("h5", b),
+            TOKEN::HEADER6(b) => bool_to_html("h6", b),
+            TOKEN::EMPTYLINE => String::from("</p><p>"),
+        });
 
-pub fn convert(line_types: Vec<LINETYPE>, line_tokens: Vec<Vec<TOKEN<String>>>) -> String {
-    let mut flags : Flags = Flags {bold:false,italic:false,code:false};
-    let mut html : Vec<String> = vec!();
-    for l in 0..line_types.len() {
-        let mut line = String::new();
-        match line_types[l] {
-            LINETYPE::LtH1 => {line += "<h1>"}
-            LINETYPE::LtH2 => {line += "<h2>"}
-            LINETYPE::LtH3 => {line += "<h3>"}
-            LINETYPE::LtH4 => {line += "<h4>"}
-            LINETYPE::LtH5 => {line += "<h5>"}
-            LINETYPE::LtH6 => {line += "<h6>"}
-            LINETYPE::LtEmpty => {line += "</p><p>"}
-            _ => {}
-        }
-        line += &convert_tokens(&line_tokens[l], &mut flags);
-        match line_types[l] {
-            LINETYPE::LtH1 => {line += "</h1>"}
-            LINETYPE::LtH2 => {line += "</h2>"}
-            LINETYPE::LtH3 => {line += "</h3>"}
-            LINETYPE::LtH4 => {line += "</h4>"}
-            LINETYPE::LtH5 => {line += "</h5>"}
-            LINETYPE::LtH6 => {line += "</h6>"}
-            _ => {}
-        }
-        html.push(line);
     }
+    out_string.push_str("</p>");
 
-    return html.join("\n");
+    return out_string;
+
     /*for l in line_tokens {
         for t in l {
             match t {

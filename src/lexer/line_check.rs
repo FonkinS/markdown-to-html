@@ -1,6 +1,6 @@
 
 use crate::lexer::LINETYPE;
-pub (super) fn check_header<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
+/*pub (super) fn check_header<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
     let mut header_depth = 0;
     let mut iter = line.chars();
     let mut prev = iter.clone();
@@ -144,4 +144,4 @@ pub (super) fn check_table<'a>(line: &'a str) -> Option<(&'a str, LINETYPE)> {
         return Some((trimmedline, LINETYPE::LtTable));
     }
     return None;
-}
+}*/
