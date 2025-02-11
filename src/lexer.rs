@@ -27,16 +27,20 @@ pub enum TOKEN<T> {
 }
 
 
-fn tokenize_emphasis(line: &str) -> Vec<TOKEN<String>> {
+struct Flags {
+    in_bold: bool,
+    in_italic: bool,
+    in_inlinecode: bool,
+    in_multilinecode: bool
+}
+
+
+fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
     let mut tokens : Vec<TOKEN<String>> = vec!();
     let line = line.replace("_", "*").replace("**", "🤓"); // 🤓 is bold
     let mut chars = line.chars();
     let mut c = chars.next();
     let mut phrase = String::new();
-
-    let mut in_bold = false;
-    let mut in_italic = false;
-    let mut in_code = false;
 
     while !c.is_none() {
         let char = c.unwrap();
@@ -45,22 +49,22 @@ fn tokenize_emphasis(line: &str) -> Vec<TOKEN<String>> {
                 tokens.push(TOKEN::TEXT(phrase));
                 phrase = String::new();
             }
-            in_italic = !in_italic;
-            tokens.push(TOKEN::ITALIC(in_italic)); // False for now, we'll change later
+            flags.in_italic = !flags.in_italic;
+            tokens.push(TOKEN::ITALIC(flags.in_italic)); // False for now, we'll change later
         } else if char == '🤓' {
             if phrase.len() != 0 {
                 tokens.push(TOKEN::TEXT(phrase));
                 phrase = String::new();
             }
-            in_bold = !in_bold;
-            tokens.push(TOKEN::BOLD(in_bold)); // False for now, we'll change later
+            flags.in_bold = !flags.in_bold;
+            tokens.push(TOKEN::BOLD(flags.in_bold)); // False for now, we'll change later
         } else if char == '`' {
             if phrase.len() != 0 {
                 tokens.push(TOKEN::TEXT(phrase));
                 phrase = String::new();
             }
-            in_code = !in_code;
-            tokens.push(TOKEN::CODE(in_code)); // False for now, we'll change later
+            flags.in_inlinecode = !flags.in_inlinecode;
+            tokens.push(TOKEN::CODE(flags.in_inlinecode)); // False for now, we'll change later
         } else {
             phrase.push(char);
         }
@@ -74,7 +78,7 @@ fn tokenize_emphasis(line: &str) -> Vec<TOKEN<String>> {
     return tokens;
 }
 
-fn tokenize_header<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+fn tokenize_header<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<String>>> {
     let mut header_depth = 0;
     let mut iter = line.chars();
     let mut prev = iter.clone();
@@ -93,7 +97,7 @@ fn tokenize_header<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
         else {return None}
         
         let mut tokens : Vec<TOKEN<String>> = vec!(initial.clone());
-        tokens.append(&mut tokenize_emphasis(prev.as_str().trim_start()));
+        tokens.append(&mut tokenize_emphasis(prev.as_str().trim_start(), flags));
         
         if header_depth == 1 {initial = TOKEN::HEADER1(false)}
         else if header_depth == 2 {initial = TOKEN::HEADER2(false)}
@@ -130,23 +134,49 @@ fn tokenize_horizontalline<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
     return None;
 }
 
-// TODO nested quotes
+// TODO MULTI <p></p> MESS
+// TODO PROPER CSS
 fn tokenize_blockquote<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
-    let mut chars = line.chars();
-    if chars.next().unwrap() == '>' {
-        return Some(vec!(TOKEN::BLOCKQUOTE(true), TOKEN::TEXT(chars.as_str().trim().to_string()), TOKEN::BLOCKQUOTE(false)));
+    let mut chars = line.trim_start().chars();
+    let mut quotecounter = 0;
+    loop {
+        match chars.next() {
+            None => break,
+            Some(c) => {
+                if c == '>' {
+                    quotecounter += 1;
+                } else {
+                    break;
+                }
+            }
+        }
     }
-    return None;
+    if quotecounter == 0 {
+        return None;
+    }
+    let mut tokens : Vec<TOKEN<String>> = vec!();
+    for _ in 0..quotecounter {
+        tokens.push(TOKEN::BLOCKQUOTE(true));
+    }
+    let text = chars.as_str();
+    tokens.push(TOKEN::TEXT(text.trim_start().to_string()));
+    if text.to_string().ends_with("  ") {
+        tokens.push(TOKEN::LINEBREAK);
+    }
+    for _ in 0..quotecounter {
+        tokens.push(TOKEN::BLOCKQUOTE(false));
+    }
+    return Some(tokens);
 }
 
 
-fn tokenize_unorderedlist<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+fn tokenize_unorderedlist<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<String>>> {
     let mut iter = line.chars();
     let c = iter.next().unwrap();
     let n = iter.next().unwrap();
     if (c == '-' || c == '+' || c == '*' || c =='–') && n == ' ' {
         let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::LISTUNORDERED(true), TOKEN::LISTITEM(true));
-        tokens.append(&mut tokenize_emphasis(iter.as_str().trim_start()));
+        tokens.append(&mut tokenize_emphasis(iter.as_str().trim_start(), flags));
         tokens.push(TOKEN::LISTITEM(false));
         tokens.push(TOKEN::LISTUNORDERED(false));
         return Some(tokens);
@@ -155,14 +185,14 @@ fn tokenize_unorderedlist<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
     return None;
 }
 
-fn tokenize_orderedlist<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+fn tokenize_orderedlist<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<String>>> {
     let halves = line.split_once(".");
     if halves != None {
         let halves = halves.unwrap();
         if halves.0.parse::<f64>().is_ok() {
             if halves.1.chars().next().unwrap() == ' ' {
                 let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::LISTORDERED(true), TOKEN::LISTITEM(true));
-                tokens.append(&mut tokenize_emphasis(halves.1.trim_start()));
+                tokens.append(&mut tokenize_emphasis(halves.1.trim_start(), flags));
                 tokens.push(TOKEN::LISTITEM(false));
                 tokens.push(TOKEN::LISTORDERED(false));
                 return Some(tokens);
@@ -172,14 +202,16 @@ fn tokenize_orderedlist<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
     return None;
 }
 
-fn tokenize_code<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
+fn tokenize_code<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<String>>> {
     if line.starts_with("```") {
-        return Some(vec!(TOKEN::CODE(true)));
+        flags.in_multilinecode = !flags.in_multilinecode;
+        return Some(vec!(TOKEN::CODE(flags.in_multilinecode)));
     } else if line.starts_with("    ") || line.starts_with("\t") {
-        let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::CODE(true));
-        tokens.append(&mut tokenize_emphasis(line.trim_start()));
-        tokens.push(TOKEN::CODE(false));
-        return Some(tokens);
+        return Some(vec!(
+            TOKEN::CODE(true), 
+            TOKEN::TEXT(line.trim_start().to_string()), 
+            TOKEN::LINEBREAK,
+            TOKEN::CODE(false)));
     }
     return None;
 }
@@ -226,41 +258,51 @@ fn fix_multilines(tokens: Vec<TOKEN<String>>) -> Vec<TOKEN<String>> {
     let oldtokens = tokens.clone();
     let mut tokens : Vec<TOKEN<String>> = vec!();
     let mut i = 0;
-    while i < oldtokens.len() - 1 {
-        if let TOKEN::BLOCKQUOTE(f) = oldtokens[i] {
-            if let TOKEN::BLOCKQUOTE(s) = oldtokens[i+1] {
-                if f == false && s == true {
-                    i += 2;
-                    continue;
+    loop {
+        let mut fixed = true;
+        while i < oldtokens.len() - 1 {
+            if let TOKEN::BLOCKQUOTE(f) = oldtokens[i] {
+                if let TOKEN::BLOCKQUOTE(s) = oldtokens[i+1] {
+                    if f == false && s == true {
+                        i += 2;
+                        fixed = false;
+                        continue;
+                    }
                 }
             }
-        }
-        if let TOKEN::BLOCKCODE(f) = oldtokens[i] {
-            if let TOKEN::BLOCKCODE(s) = oldtokens[i+1] {
-                if f == false && s == true {
-                    i += 2;
-                    continue;
+            if let TOKEN::BLOCKCODE(f) = oldtokens[i] {
+                if let TOKEN::BLOCKCODE(s) = oldtokens[i+1] {
+                    if f == false && s == true {
+                        i += 2;
+                        fixed = false;
+                        continue;
+                    }
                 }
             }
-        }
-        if let TOKEN::LISTORDERED(f) = oldtokens[i] {
-            if let TOKEN::LISTORDERED(s) = oldtokens[i+1] {
-                if f == false && s == true {
-                    i += 2;
-                    continue;
+            if let TOKEN::LISTORDERED(f) = oldtokens[i] {
+                if let TOKEN::LISTORDERED(s) = oldtokens[i+1] {
+                    if f == false && s == true {
+                        i += 2;
+                        fixed = false;
+                        continue;
+                    }
                 }
             }
-        }
-        if let TOKEN::LISTUNORDERED(f) = oldtokens[i] {
-            if let TOKEN::LISTUNORDERED(s) = oldtokens[i+1] {
-                if f == false && s == true {
-                    i += 2;
-                    continue;
+            if let TOKEN::LISTUNORDERED(f) = oldtokens[i] {
+                if let TOKEN::LISTUNORDERED(s) = oldtokens[i+1] {
+                    if f == false && s == true {
+                        i += 2;
+                        fixed = false;
+                        continue;
+                    }
                 }
             }
+            tokens.push(oldtokens[i].clone());
+            i += 1;
         }
-        tokens.push(oldtokens[i].clone());
-        i += 1;
+        if fixed {
+            break;
+        }
     }
     tokens.push(oldtokens[i].clone());
     return tokens;
@@ -272,20 +314,26 @@ fn fix_multilines(tokens: Vec<TOKEN<String>>) -> Vec<TOKEN<String>> {
 pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     //let (line_types, line_contents) = analyze_lines(lines);
     //let line_tokens = create_tokens(&line_contents, &line_types);
+    let mut flags = Flags {
+        in_bold: false,
+        in_italic: false,
+        in_inlinecode: false,
+        in_multilinecode: false
+    };
     let mut tokens : Vec<TOKEN<String>> = vec!();
     for line in lines {
         if line.trim().len() == 0 {tokens.push(TOKEN::EMPTYLINE);continue}
         let trimline = line.trim();
-        if implement_tokens(tokenize_header(trimline), &mut tokens) {continue} 
+        if implement_tokens(tokenize_header(trimline, &mut flags), &mut tokens) {continue} 
         if implement_tokens(tokenize_horizontalline(trimline), &mut tokens) {continue}
-        if implement_tokens(tokenize_blockquote(trimline), &mut tokens) {continue}
-        if implement_tokens(tokenize_unorderedlist(trimline), &mut tokens) {continue}
-        if implement_tokens(tokenize_orderedlist(trimline), &mut tokens) {continue}
-        if implement_tokens(tokenize_code(line), &mut tokens) {continue}
+        if implement_tokens(tokenize_blockquote(line), &mut tokens) {continue}
+        if implement_tokens(tokenize_unorderedlist(trimline, &mut flags), &mut tokens) {continue}
+        if implement_tokens(tokenize_orderedlist(trimline, &mut flags), &mut tokens) {continue}
+        if implement_tokens(tokenize_code(line, &mut flags), &mut tokens) {continue}
         if implement_tokens(tokenize_image(trimline), &mut tokens) {continue}
-        implement_tokens(Some(tokenize_emphasis(trimline)), &mut tokens);
+        implement_tokens(Some(tokenize_emphasis(trimline, &mut flags)), &mut tokens);
         
-        if line.ends_with("  ") {
+        if line.ends_with("  ") || flags.in_multilinecode {
             tokens.push(TOKEN::LINEBREAK)
         }
     }
