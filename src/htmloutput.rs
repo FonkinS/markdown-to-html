@@ -8,6 +8,14 @@ fn bool_to_html(t: &str, b: bool) -> String {
     }
 }
 
+fn link_bool_to_html(b: bool, s: String) -> String {
+    if b {
+        return "<a href=".to_owned() + &s + ">";
+    } else  {
+        return "</a>".to_string();
+    }
+}
+
 pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
     let mut out_string = String::from("<p>");
 
@@ -25,8 +33,8 @@ pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
             TOKEN::TABLEROW(b) => bool_to_html("tr", b),
             TOKEN::TABLEDATACELL(b) => bool_to_html("td", b),
             TOKEN::TABLEHEADERCELL(b) => bool_to_html("th", b),
-            TOKEN::LINK{text: _t, link:_l, caption:_c} => String::new(),
-            TOKEN::IMAGE{caption:_c, link:_l} => String::new(),
+            TOKEN::LINK(b, s) => link_bool_to_html(b, s),
+            TOKEN::IMAGE{caption:c, link:l} => String::from("<img src=\"".to_owned() + &l + "\" alt=\"" + &c + "\">"),
             TOKEN::LISTORDERED(b) => bool_to_html("ol", b),
             TOKEN::LISTUNORDERED(b) => bool_to_html("ul", b),
             TOKEN::LISTITEM(b) => bool_to_html("li", b),

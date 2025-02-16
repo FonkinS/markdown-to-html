@@ -12,7 +12,7 @@ pub enum TOKEN<T> {
     TABLEROW(bool),
     TABLEDATACELL(bool),
     TABLEHEADERCELL(bool),
-    LINK {text: T, link:String, caption:String},
+    LINK(bool, String),
     IMAGE {caption: T, link: String},
     HORIZONTALLINE,
     LISTORDERED(bool),
@@ -41,14 +41,29 @@ struct Flags {
 
 fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
     let mut tokens : Vec<TOKEN<String>> = vec!();
-    let line = line.replace("_", "*").replace("**", "🤓").replace("~~", "🎵"); // 🤓 is bold;🎵 is striketrhogu
+    let line = line.replace("_", "*").replace("**", "🤓").replace("~~", "🎵").replace("](", "⌬"); // 🤓 is bold;🎵 is striketrhogu ⌬ is middle of link
     let mut chars = line.chars();
     let mut c = chars.next();
     let mut phrase = String::new();
 
+    let mut inlink = false;
+    let mut old_tokens : Vec<TOKEN<String>> = vec!();
+
     while !c.is_none() {
         let char = c.unwrap();
-        if char == '*' {
+        if inlink {
+            if char == ')' {
+                inlink = false;
+                old_tokens.push(TOKEN::LINK(true, phrase.clone()));
+                old_tokens.append(&mut tokens);
+                old_tokens.push(TOKEN::LINK(false, phrase.clone()));
+                tokens = old_tokens.clone();
+                old_tokens = vec!();
+                phrase = String::new();
+            } else {
+                phrase.push(char);
+            }
+        } else if char == '*' {
             if phrase.len() != 0 {
                 tokens.push(TOKEN::TEXT(phrase));
                 phrase = String::new();
@@ -76,7 +91,19 @@ fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
             }
             flags.in_strikethrough = !flags.in_strikethrough;
             tokens.push(TOKEN::STRIKETHROUGH(flags.in_strikethrough)); 
-
+        } else if char == '[' && !flags.in_inlinecode && !flags.in_multilinecode {
+            if phrase.len() != 0 {
+                tokens.push(TOKEN::TEXT(phrase));
+                phrase = String::new();
+            }
+            old_tokens = tokens.clone();
+            tokens = vec!();
+        } else if char == '⌬' {
+            inlink = true;
+            if phrase.len() != 0 {
+                tokens.push(TOKEN::TEXT(phrase));
+                phrase = String::new();
+            }
         } else {
             phrase.push(char);
         }
@@ -230,7 +257,12 @@ fn tokenize_code<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<Strin
 fn tokenize_image<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
     if line.starts_with("!") {
         if line.contains("(") && line.contains(")") && line.contains("[") && line.contains("]") {
-            return Some(vec!(TOKEN::IMAGE{caption: line.to_string(), link: "www.google.com".to_string()}));
+            return Some(vec!(TOKEN::IMAGE{
+                caption: 
+                    line.split("[").collect::<Vec<&str>>()[1].split("]").collect::<Vec<&str>>()[0].to_string(),
+                link: 
+                    line.split("(").collect::<Vec<&str>>()[1].split(")").collect::<Vec<&str>>()[0].to_string()
+            }));
         }
     }
     return None;
@@ -366,6 +398,8 @@ fn fix_multilines(tokens: Vec<TOKEN<String>>) -> Vec<TOKEN<String>> {
 
 
 // TODO backslash escaping
+// TODO Link support
+// TODO REGEX
 pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     //let (line_types, line_contents) = analyze_lines(lines);
     //let line_tokens = create_tokens(&line_contents, &line_types);
@@ -401,20 +435,5 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     // Fix Indent code and blockquotes
     let tokens = fix_multilines(tokens);
 
-    //println!("{tokens:?}");
-    
-
-    /*for l in &line_tokens {
-        for t in l {
-            match t {
-                TOKEN::TEXT(x) => {print!("{x}")}
-                TOKEN::TABLESPLIT => {print!(" | ")}
-                _ => {print!("{:?}", t)}
-            }
-        }
-        println!("");
-    }*/
-   
     return tokens;
-    //println!("{:?}", line_contents);
 }
