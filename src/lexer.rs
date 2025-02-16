@@ -6,6 +6,9 @@ pub enum TOKEN<T> {
     ITALIC(bool),
     STRIKETHROUGH(bool),
     CODE(bool),
+    HIGHLIGHT(bool),
+    SUBSCRIPT(bool),
+    SUPERSCRIPT(bool),
     BLOCKCODE(bool),
     LINEBREAK,
     TABLE(bool),
@@ -36,6 +39,9 @@ struct Flags {
     in_inlinecode: bool,
     in_multilinecode: bool,
     in_table_header: bool,
+    in_highlight: bool,
+    in_superscript: bool,
+    in_subscript: bool,
 }
 
 
@@ -43,8 +49,9 @@ fn push_text<'a>(tokens: &mut Vec<TOKEN<String>>, phrase: String) -> String {
     if phrase.len() != 0 {
         tokens.push(TOKEN::TEXT(phrase.replace("⌘", "__").replace("⎋", "**")
                     .replace("⏎", "_").replace("↩︎", "*")
+                    .replace("⇢","~").replace("→", "^")
                     .replace("⏏︎", "~~").replace("⇥", "[")
-                    .replace("⇤", "](")
+                    .replace("⇤", "](").replace("⚙︎", "==")
                 ));
     }
     return String::new();
@@ -54,9 +61,10 @@ fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
     let mut tokens : Vec<TOKEN<String>> = vec!();
     let line = line.replace("\\__", "⌘").replace("\\**", "⎋")
                     .replace("\\_", "⏎").replace("\\*", "↩︎")
+                    .replace("\\~", "⇢").replace("\\^", "→")
                     .replace("\\~~", "⏏︎").replace("\\[", "⇥")
-                    .replace("\\](", "⇤");
-    let line = line.replace("_", "*").replace("**", "⇧").replace("~~", "⌤").replace("](", "⌬"); // ⇧ is bold;⌤ is striketrhogu ⌬ is middle of link
+                    .replace("\\](", "⇤").replace("\\==", "⚙︎");
+    let line = line.replace("_", "*").replace("**", "⇧").replace("~~", "⌤").replace("](", "⌬").replace("==", "⌆"); // ⇧ is bold;⌤ is striketrhogu ⌬ is middle of link
     let mut chars = line.chars();
     let mut c = chars.next();
     let mut phrase = String::new();
@@ -90,6 +98,18 @@ fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
             phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_inlinecode = !flags.in_inlinecode;
             tokens.push(TOKEN::CODE(flags.in_inlinecode)); 
+        } else if char == '⌆' {
+            phrase = push_text(&mut tokens, phrase); // returns empty
+            flags.in_highlight = !flags.in_highlight;
+            tokens.push(TOKEN::HIGHLIGHT(flags.in_highlight)); 
+        } else if char == '~' {
+            phrase = push_text(&mut tokens, phrase); // returns empty
+            flags.in_subscript = !flags.in_subscript;
+            tokens.push(TOKEN::SUBSCRIPT(flags.in_subscript)); 
+        } else if char == '^' {
+            phrase = push_text(&mut tokens, phrase); // returns empty
+            flags.in_superscript = !flags.in_superscript;
+            tokens.push(TOKEN::SUPERSCRIPT(flags.in_superscript)); 
         } else if char == '⌤' {
             phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_strikethrough = !flags.in_strikethrough;
@@ -405,6 +425,9 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
         in_inlinecode: false,
         in_multilinecode: false,
         in_table_header: false,
+        in_highlight: false,
+        in_subscript: false,
+        in_superscript: false,
     };
 
     
@@ -448,11 +471,11 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     for t in tokens {
         match t {
             TOKEN::TEXT(s) => {
-                let mut t = s.replace("\\:", "⏏︎").replace("\\", "").replace("⌦", "\\");
+                let mut t = s.replace("\\:", "⏏︎").replace(": ", "⍝").replace("\\", "").replace("⌦", "\\");
                 for e in &emojis {
                     t = t.replace(e.0, e.1);
                 }
-                new_tokens.push(TOKEN::TEXT(t.replace("⏏︎", ":")));
+                new_tokens.push(TOKEN::TEXT(t.replace("⏏︎", ":").replace("⍝", ": ").replace("🅱️🅰️Ⓜ️", "")));
             },
             _ => new_tokens.push(t),
         }
