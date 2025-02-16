@@ -39,8 +39,23 @@ struct Flags {
 }
 
 
+fn push_text<'a>(tokens: &mut Vec<TOKEN<String>>, phrase: String) -> String {
+    if phrase.len() != 0 {
+        tokens.push(TOKEN::TEXT(phrase.replace("⌘", "__").replace("⎋", "**")
+                    .replace("⏎", "_").replace("↩︎", "*")
+                    .replace("⏏︎", "~~").replace("⇥", "[")
+                    .replace("⇤", "](")
+                ));
+    }
+    return String::new();
+}
+
 fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
     let mut tokens : Vec<TOKEN<String>> = vec!();
+    let line = line.replace("\\__", "⌘").replace("\\**", "⎋")
+                    .replace("\\_", "⏎").replace("\\*", "↩︎")
+                    .replace("\\~~", "⏏︎").replace("\\[", "⇥")
+                    .replace("\\](", "⇤");
     let line = line.replace("_", "*").replace("**", "🤓").replace("~~", "🎵").replace("](", "⌬"); // 🤓 is bold;🎵 is striketrhogu ⌬ is middle of link
     let mut chars = line.chars();
     let mut c = chars.next();
@@ -64,55 +79,35 @@ fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
                 phrase.push(char);
             }
         } else if char == '*' {
-            if phrase.len() != 0 {
-                tokens.push(TOKEN::TEXT(phrase));
-                phrase = String::new();
-            }
+            phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_italic = !flags.in_italic;
             tokens.push(TOKEN::ITALIC(flags.in_italic)); 
         } else if char == '🤓' {
-            if phrase.len() != 0 {
-                tokens.push(TOKEN::TEXT(phrase));
-                phrase = String::new();
-            }
+            phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_bold = !flags.in_bold;
             tokens.push(TOKEN::BOLD(flags.in_bold)); 
         } else if char == '`' {
-            if phrase.len() != 0 {
-                tokens.push(TOKEN::TEXT(phrase));
-                phrase = String::new();
-            }
+            phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_inlinecode = !flags.in_inlinecode;
             tokens.push(TOKEN::CODE(flags.in_inlinecode)); 
         } else if char == '🎵' {
-            if phrase.len() != 0 {
-                tokens.push(TOKEN::TEXT(phrase));
-                phrase = String::new();
-            }
+            phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_strikethrough = !flags.in_strikethrough;
             tokens.push(TOKEN::STRIKETHROUGH(flags.in_strikethrough)); 
         } else if char == '[' && !flags.in_inlinecode && !flags.in_multilinecode {
-            if phrase.len() != 0 {
-                tokens.push(TOKEN::TEXT(phrase));
-                phrase = String::new();
-            }
+            phrase = push_text(&mut tokens, phrase); // returns empty
             old_tokens = tokens.clone();
             tokens = vec!();
         } else if char == '⌬' {
             inlink = true;
-            if phrase.len() != 0 {
-                tokens.push(TOKEN::TEXT(phrase));
-                phrase = String::new();
-            }
+            phrase = push_text(&mut tokens, phrase); // returns empty
         } else {
             phrase.push(char);
         }
 
         c = chars.next();
     }
-    if phrase.len() != 0 {
-        tokens.push(TOKEN::TEXT(phrase));
-    }
+    push_text(&mut tokens, phrase);
 
     return tokens;
 }
@@ -413,16 +408,17 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     };
     let mut tokens : Vec<TOKEN<String>> = vec!();
     for line in lines {
+        let line = line.replace("\\\\", "⌦");
         if line.trim().len() == 0 {tokens.push(TOKEN::EMPTYLINE);continue}
         let trimline = line.trim();
         if implement_tokens(tokenize_table(trimline, &mut flags), &mut tokens) {continue}
         flags.in_table_header = true;
         if implement_tokens(tokenize_header(trimline, &mut flags), &mut tokens) {continue} 
         if implement_tokens(tokenize_horizontalline(trimline), &mut tokens) {continue}
-        if implement_tokens(tokenize_blockquote(line), &mut tokens) {continue}
+        if implement_tokens(tokenize_blockquote(&line), &mut tokens) {continue}
         if implement_tokens(tokenize_unorderedlist(trimline, &mut flags), &mut tokens) {continue}
         if implement_tokens(tokenize_orderedlist(trimline, &mut flags), &mut tokens) {continue}
-        if implement_tokens(tokenize_code(line, &mut flags), &mut tokens) {continue}
+        if implement_tokens(tokenize_code(&line, &mut flags), &mut tokens) {continue}
         if implement_tokens(tokenize_image(trimline), &mut tokens) {continue}
         implement_tokens(Some(tokenize_emphasis(trimline, &mut flags)), &mut tokens);
         
@@ -435,5 +431,13 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     // Fix Indent code and blockquotes
     let tokens = fix_multilines(tokens);
 
-    return tokens;
+    let mut new_tokens : Vec<TOKEN<String>> = vec!();
+    for t in tokens {
+        match t {
+            TOKEN::TEXT(s) => new_tokens.push(TOKEN::TEXT(s.replace("\\", "").replace("⌦", "\\"))),
+            _ => new_tokens.push(t),
+        }
+    }
+
+    return new_tokens;
 }
