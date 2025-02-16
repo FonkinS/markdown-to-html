@@ -17,7 +17,7 @@ fn link_bool_to_html(b: bool, s: String) -> String {
 }
 
 pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
-    let mut out_string = String::from("<p>");
+    let mut out_string = String::from("<!DOCTYPE html><html><body><meta charset=\"UTF-8\"><p>");
 
     for t in tokens {
         out_string.push_str(&match t {
@@ -50,7 +50,7 @@ pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
 
     }
 
-    out_string.push_str("</p>");
+    out_string.push_str("</p></body></html>");
 
 
     // Fix paragraph <p>s

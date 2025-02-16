@@ -56,7 +56,7 @@ fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
                     .replace("\\_", "⏎").replace("\\*", "↩︎")
                     .replace("\\~~", "⏏︎").replace("\\[", "⇥")
                     .replace("\\](", "⇤");
-    let line = line.replace("_", "*").replace("**", "🤓").replace("~~", "🎵").replace("](", "⌬"); // 🤓 is bold;🎵 is striketrhogu ⌬ is middle of link
+    let line = line.replace("_", "*").replace("**", "⇧").replace("~~", "⌤").replace("](", "⌬"); // ⇧ is bold;⌤ is striketrhogu ⌬ is middle of link
     let mut chars = line.chars();
     let mut c = chars.next();
     let mut phrase = String::new();
@@ -82,7 +82,7 @@ fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
             phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_italic = !flags.in_italic;
             tokens.push(TOKEN::ITALIC(flags.in_italic)); 
-        } else if char == '🤓' {
+        } else if char == '⇧' {
             phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_bold = !flags.in_bold;
             tokens.push(TOKEN::BOLD(flags.in_bold)); 
@@ -90,7 +90,7 @@ fn tokenize_emphasis(line: &str, flags: &mut Flags) -> Vec<TOKEN<String>> {
             phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_inlinecode = !flags.in_inlinecode;
             tokens.push(TOKEN::CODE(flags.in_inlinecode)); 
-        } else if char == '🎵' {
+        } else if char == '⌤' {
             phrase = push_text(&mut tokens, phrase); // returns empty
             flags.in_strikethrough = !flags.in_strikethrough;
             tokens.push(TOKEN::STRIKETHROUGH(flags.in_strikethrough)); 
@@ -406,6 +406,8 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
         in_multilinecode: false,
         in_table_header: false,
     };
+
+    
     let mut tokens : Vec<TOKEN<String>> = vec!();
     for line in lines {
         let line = line.replace("\\\\", "⌦");
@@ -430,11 +432,28 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
 
     // Fix Indent code and blockquotes
     let tokens = fix_multilines(tokens);
+    
+
+    let mut emojis : Vec<(&str, &str)> = vec!();
+    {
+        let emojis_src : Vec<&str> = include_str!("../assets/emojis.txt").split("\n").collect();
+        for l in emojis_src {
+            let e : Vec<&str> = l.split(",").collect();
+            if e.len() != 2 {break}
+            emojis.push((e[0], e[1]));
+        }
+    }
 
     let mut new_tokens : Vec<TOKEN<String>> = vec!();
     for t in tokens {
         match t {
-            TOKEN::TEXT(s) => new_tokens.push(TOKEN::TEXT(s.replace("\\", "").replace("⌦", "\\"))),
+            TOKEN::TEXT(s) => {
+                let mut t = s.replace("\\", "").replace("⌦", "\\");
+                for e in &emojis {
+                    t = t.replace(e.0, e.1);
+                }
+                new_tokens.push(TOKEN::TEXT(t));
+            },
             _ => new_tokens.push(t),
         }
     }
