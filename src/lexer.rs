@@ -284,15 +284,6 @@ fn tokenize_image<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
 }
 
 
-/*fn check_table_split<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
-    let changedline = line.trim().replace(" ", "").replace("|", "").replace("-", "").replace("–", "").replace(":", "");
-    if changedline.len() == 0 {
-        return Some(("TABLE SPLIT", LINETYPE::LtTableSplit));
-    }
-    return None;
-}*/
-
-
 fn tokenize_table<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<String>>> {
     let trimmedline = line.trim();
     if !trimmedline.starts_with("|") || !trimmedline.ends_with("|") {
@@ -335,7 +326,6 @@ fn tokenize_table<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<Stri
     tokens.push(TOKEN::TABLE(false));
     return Some(tokens);
 }
-// TODO TABLES
 // TODO TABLE CENTERING
 
 
@@ -412,12 +402,34 @@ fn fix_multilines(tokens: Vec<TOKEN<String>>) -> Vec<TOKEN<String>> {
 }
 
 
-// TODO backslash escaping
-// TODO Link support
-// TODO REGEX
-pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
-    //let (line_types, line_contents) = analyze_lines(lines);
-    //let line_tokens = create_tokens(&line_contents, &line_types);
+fn interpret_emojis(tokens: Vec<TOKEN<String>>) -> Vec<TOKEN<String>> {
+    let mut emojis : Vec<(&str, &str)> = vec!();
+    {
+        let emojis_src : Vec<&str> = include_str!("../assets/emojis.txt").split("\n").collect();
+        for l in emojis_src {
+            let e : Vec<&str> = l.split(",").collect();
+            if e.len() != 2 {break}
+            emojis.push((e[0], e[1]));
+        }
+    }
+    let mut new_tokens : Vec<TOKEN<String>> = vec!();
+    for t in tokens {
+        match t {
+            TOKEN::TEXT(s) => {
+                let mut t = s.replace("\\:", "⏏︎").replace(": ", "⍝").replace("\\", "").replace("⌦", "\\");
+                for e in &emojis {
+                    t = t.replace(e.0, e.1);
+                }
+                new_tokens.push(TOKEN::TEXT(t.replace("⏏︎", ":").replace("⍝", ": ").replace("🅱️🅰️Ⓜ️", "")));
+            },
+            _ => new_tokens.push(t),
+        }
+    }
+    return new_tokens;
+}
+
+
+fn tokenize(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     let mut flags = Flags {
         in_bold: false,
         in_italic: false,
@@ -429,8 +441,6 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
         in_subscript: false,
         in_superscript: false,
     };
-
-    
     let mut tokens : Vec<TOKEN<String>> = vec!();
     for line in lines {
         let line = line.replace("\\\\", "⌦");
@@ -451,35 +461,15 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
             tokens.push(TOKEN::LINEBREAK)
         }
     }
+    return tokens;
+}
 
 
-    // Fix Indent code and blockquotes
+// TODO REGEX
+pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
+    let tokens = tokenize(lines);
     let tokens = fix_multilines(tokens);
-    
+    let tokens = interpret_emojis(tokens);
 
-    let mut emojis : Vec<(&str, &str)> = vec!();
-    {
-        let emojis_src : Vec<&str> = include_str!("../assets/emojis.txt").split("\n").collect();
-        for l in emojis_src {
-            let e : Vec<&str> = l.split(",").collect();
-            if e.len() != 2 {break}
-            emojis.push((e[0], e[1]));
-        }
-    }
-
-    let mut new_tokens : Vec<TOKEN<String>> = vec!();
-    for t in tokens {
-        match t {
-            TOKEN::TEXT(s) => {
-                let mut t = s.replace("\\:", "⏏︎").replace(": ", "⍝").replace("\\", "").replace("⌦", "\\");
-                for e in &emojis {
-                    t = t.replace(e.0, e.1);
-                }
-                new_tokens.push(TOKEN::TEXT(t.replace("⏏︎", ":").replace("⍝", ": ").replace("🅱️🅰️Ⓜ️", "")));
-            },
-            _ => new_tokens.push(t),
-        }
-    }
-
-    return new_tokens;
+    return tokens;
 }
