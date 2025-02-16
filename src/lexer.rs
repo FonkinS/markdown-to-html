@@ -448,11 +448,11 @@ pub fn analyze(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     for t in tokens {
         match t {
             TOKEN::TEXT(s) => {
-                let mut t = s.replace("\\", "").replace("⌦", "\\");
+                let mut t = s.replace("\\:", "⏏︎").replace("\\", "").replace("⌦", "\\");
                 for e in &emojis {
                     t = t.replace(e.0, e.1);
                 }
-                new_tokens.push(TOKEN::TEXT(t));
+                new_tokens.push(TOKEN::TEXT(t.replace("⏏︎", ":")));
             },
             _ => new_tokens.push(t),
         }
