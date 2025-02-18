@@ -225,8 +225,12 @@ fn tokenize_blockquote<'a>(line: &'a str) -> Option<Vec<TOKEN<String>>> {
 
 fn tokenize_unorderedlist<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<String>>> {
     let mut iter = line.chars();
-    let c = iter.next().unwrap();
-    let n = iter.next().unwrap();
+    let c = iter.next();
+    if c.is_none() {return None;}
+    let c = c.unwrap();
+    let n = iter.next();
+    if n.is_none() {return None;}
+    let n = n.unwrap();
     if (c == '-' || c == '+' || c == '*' || c =='–') && n == ' ' {
         let mut tokens : Vec<TOKEN<String>> = vec!(TOKEN::LISTUNORDERED(true), TOKEN::LISTITEM(true));
         tokens.append(&mut tokenize_emphasis(iter.as_str().trim_start(), flags));
@@ -258,13 +262,13 @@ fn tokenize_orderedlist<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKE
 fn tokenize_code<'a>(line: &'a str, flags: &mut Flags) -> Option<Vec<TOKEN<String>>> {
     if line.starts_with("```") {
         flags.in_multilinecode = !flags.in_multilinecode;
-        return Some(vec!(TOKEN::CODE(flags.in_multilinecode)));
+        return Some(vec!(TOKEN::BLOCKCODE(flags.in_multilinecode)));
     } else if line.starts_with("    ") || line.starts_with("\t") {
         return Some(vec!(
-            TOKEN::CODE(true), 
+            TOKEN::BLOCKCODE(true), 
             TOKEN::TEXT(line.trim_start().to_string()), 
             TOKEN::LINEBREAK,
-            TOKEN::CODE(false)));
+            TOKEN::BLOCKCODE(false)));
     }
     return None;
 }
@@ -416,11 +420,11 @@ fn interpret_emojis(tokens: Vec<TOKEN<String>>) -> Vec<TOKEN<String>> {
     for t in tokens {
         match t {
             TOKEN::TEXT(s) => {
-                let mut t = s.replace("\\:", "⏏︎").replace(": ", "⍝").replace("\\", "").replace("⌦", "\\");
+                let mut t = s.replace("\\:", "⏏︎")/*.replace(": ", "⍝")*/.replace("\\", "").replace("⌦", "\\");
                 for e in &emojis {
                     t = t.replace(e.0, e.1);
                 }
-                new_tokens.push(TOKEN::TEXT(t.replace("⏏︎", ":").replace("⍝", ": ").replace("🅱️🅰️Ⓜ️", "")));
+                new_tokens.push(TOKEN::TEXT(t.replace("⏏︎", ":")/*.replace("⍝", ": ")*/.replace("🅱️🅰️Ⓜ️", "")));
             },
             _ => new_tokens.push(t),
         }
@@ -444,18 +448,22 @@ fn tokenize(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     let mut tokens : Vec<TOKEN<String>> = vec!();
     for line in lines {
         let line = line.replace("\\\\", "⌦");
-        if line.trim().len() == 0 {tokens.push(TOKEN::EMPTYLINE);continue}
+        if line.trim().len() == 0 && !flags.in_multilinecode {tokens.push(TOKEN::EMPTYLINE);continue}
         let trimline = line.trim();
-        if implement_tokens(tokenize_table(trimline, &mut flags), &mut tokens) {continue}
-        flags.in_table_header = true;
-        if implement_tokens(tokenize_header(trimline, &mut flags), &mut tokens) {continue} 
-        if implement_tokens(tokenize_horizontalline(trimline), &mut tokens) {continue}
-        if implement_tokens(tokenize_blockquote(&line), &mut tokens) {continue}
-        if implement_tokens(tokenize_unorderedlist(trimline, &mut flags), &mut tokens) {continue}
         if implement_tokens(tokenize_orderedlist(trimline, &mut flags), &mut tokens) {continue}
+        if implement_tokens(tokenize_unorderedlist(trimline, &mut flags), &mut tokens) {continue}
         if implement_tokens(tokenize_code(&line, &mut flags), &mut tokens) {continue}
-        if implement_tokens(tokenize_image(trimline), &mut tokens) {continue}
-        implement_tokens(Some(tokenize_emphasis(trimline, &mut flags)), &mut tokens);
+        if !flags.in_multilinecode {
+            if implement_tokens(tokenize_table(trimline, &mut flags), &mut tokens) {continue}
+            flags.in_table_header = true;
+            if implement_tokens(tokenize_header(trimline, &mut flags), &mut tokens) {continue} 
+            if implement_tokens(tokenize_horizontalline(trimline), &mut tokens) {continue}
+            if implement_tokens(tokenize_blockquote(&line), &mut tokens) {continue}
+            if implement_tokens(tokenize_image(trimline), &mut tokens) {continue}
+            implement_tokens(Some(tokenize_emphasis(trimline, &mut flags)), &mut tokens);
+        } else  {
+            tokens.push(TOKEN::TEXT(line.clone()));
+        }
         
         if line.ends_with("  ") || flags.in_multilinecode {
             tokens.push(TOKEN::LINEBREAK)

@@ -1,6 +1,7 @@
-use std::env;
 use std::fs;
 use std::io::Write;
+
+use clap::Parser;
 
 // cargo run -- test.md
 
@@ -15,17 +16,28 @@ fn handle_error(error: String) {
     return;
 }
 
+// turn a markdown or MD file into a HTML one
+#[derive(Parser)]
+struct Cli {
+    // The filepath for the markdown input
+    in_path: std::path::PathBuf,
+    // The filepath for the markdown Output
+    #[arg(short='o', long="output")]
+    out_path: std::path::PathBuf,
+    // the optional filepath for CSS styling
+    #[arg(long="css")]
+    css_path: Option<std::path::PathBuf>,
+    // Flag for whether uft-8 should be allowed
+    #[arg(long)]
+    utf8: bool,
+}
+
 fn main() {
     // Get Args
-    let args: Vec<String> = env::args().collect();
-    if args.len() == 1 {
-        return handle_error("File path expected!".to_string());
-    } else if args.len() == 2 {
-        return handle_error("Output path expected!".to_string());
-    }
+    let args = Cli::parse();
 
     // Open File
-    let file_contents = fs::read_to_string(&args[1]);
+    let file_contents = fs::read_to_string(args.in_path);
     if let Err(e) = file_contents {
         return handle_error(e.to_string());
     }
@@ -37,9 +49,21 @@ fn main() {
     let tokens = lexer::analyze(&lines);
 
     //let (line_types, line_tokens) = lexer::analyze(&lines);
-    let html = htmloutput::convert(tokens);
 
-    let mut out_file = fs::File::create(&args[2]).unwrap();
+    let mut html = "<!DOCTYPE html><html><body>".to_string();
+    if args.utf8 {
+        html.push_str("<meta charset=\"UTF-8\">");
+    }
+    if args.css_path.is_some() {
+        html.push_str("<link rel=\"stylesheet\" href=\"");
+        html.push_str(args.css_path.unwrap().to_str().unwrap());
+        html.push_str("\">");
+    }
+
+    html.push_str(&htmloutput::convert(tokens));
+    html.push_str("</body></html>");
+
+    let mut out_file = fs::File::create(args.out_path).unwrap();
     let _ = out_file.write_all(html.as_bytes());
 
 

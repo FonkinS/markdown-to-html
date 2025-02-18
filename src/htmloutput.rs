@@ -8,6 +8,15 @@ fn bool_to_html(t: &str, b: bool) -> String {
     }
 }
 
+fn multi_bool_to_html(f: &str, s: &str, b: bool) -> String {
+    if b {
+        return "<".to_owned() + f + ">" + "<" + s + ">";
+    } else {
+        return "</".to_owned() + s + ">" + "</" + f + ">";
+    }
+
+}
+
 fn link_bool_to_html(b: bool, s: String) -> String {
     if b {
         return "<a href=".to_owned() + &s + ">";
@@ -17,7 +26,7 @@ fn link_bool_to_html(b: bool, s: String) -> String {
 }
 
 pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
-    let mut out_string = String::from("<!DOCTYPE html><html><body><meta charset=\"UTF-8\"><p>");
+    let mut out_string = String::from("<p>");
 
     for t in tokens {
         out_string.push_str(&match t {
@@ -29,7 +38,7 @@ pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
             TOKEN::HIGHLIGHT(b) => bool_to_html("mark", b),
             TOKEN::SUPERSCRIPT(b) => bool_to_html("sup", b),
             TOKEN::SUBSCRIPT(b) => bool_to_html("sub", b),
-            TOKEN::BLOCKCODE(b) => bool_to_html("code", b),
+            TOKEN::BLOCKCODE(b) => multi_bool_to_html("pre", "code", b),
             TOKEN::HORIZONTALLINE => String::from("<hr/>"),
             TOKEN::LINEBREAK => String::from("<br/>"),
             TOKEN::TABLE(b) => bool_to_html("table", b),
@@ -53,7 +62,7 @@ pub fn convert(tokens: Vec<TOKEN<String>>) -> String {
 
     }
 
-    out_string.push_str("</p></body></html>");
+    out_string.push_str("</p>");
 
 
     // Fix paragraph <p>s
