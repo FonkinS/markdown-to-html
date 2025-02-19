@@ -30,6 +30,9 @@ struct Cli {
     // Flag for whether uft-8 should be allowed
     #[arg(long)]
     utf8: bool,
+    // Flag for whether html structure should be included
+    #[arg(long)]
+    head: bool,
 }
 
 fn main() {
@@ -50,7 +53,10 @@ fn main() {
 
     //let (line_types, line_tokens) = lexer::analyze(&lines);
 
-    let mut html = "<!DOCTYPE html><html><body>".to_string();
+    let mut html = String::new();
+    if args.head {
+        html.push_str("<!DOCTYPE html><html><body>");
+    }
     if args.utf8 {
         html.push_str("<meta charset=\"UTF-8\">");
     }
@@ -61,7 +67,9 @@ fn main() {
     }
 
     html.push_str(&htmloutput::convert(tokens));
-    html.push_str("</body></html>");
+    if args.head {
+        html.push_str("</body></html>");
+    }
 
     let mut out_file = fs::File::create(args.out_path).unwrap();
     let _ = out_file.write_all(html.as_bytes());
