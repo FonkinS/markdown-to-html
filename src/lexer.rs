@@ -448,7 +448,13 @@ fn tokenize(lines: &Vec<&str>) -> Vec<TOKEN<String>> {
     let mut tokens : Vec<TOKEN<String>> = vec!();
     for line in lines {
         let line = line.replace("\\\\", "⌦");
-        if line.trim().len() == 0 && !flags.in_multilinecode {tokens.push(TOKEN::EMPTYLINE);continue}
+        if line.trim().len() == 0 && !flags.in_multilinecode {
+            if line.ends_with("  ") || flags.in_multilinecode {
+                tokens.push(TOKEN::LINEBREAK)
+            }
+            tokens.push(TOKEN::EMPTYLINE);
+            continue;
+        }
         let trimline = line.trim();
         if implement_tokens(tokenize_orderedlist(trimline, &mut flags), &mut tokens) {continue}
         if implement_tokens(tokenize_unorderedlist(trimline, &mut flags), &mut tokens) {continue}
